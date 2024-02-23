@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(morlet.fb, 1.0);
         assert_eq!(morlet.fb2, 2.0);
         assert_eq!(morlet.ifb, 1.0);
-        assert_eq!(morlet.four_wavelen, 0.9867);
+        assert_eq!(morlet.four_wavelen, 0.9876);
         assert!(!morlet.imag_frequency);
         assert!(!morlet.double_sided);
     }

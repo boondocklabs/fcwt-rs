@@ -1,6 +1,4 @@
-use std::sync::Arc;
-use rustfft::{num_traits::Zero, Fft};
-
+use crate::fft::FftBackend;
 use crate::{scales::Scales, wavelet::Wavelet};
 
 type Float = super::Float;
@@ -41,43 +39,32 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
 
         assert!(input.len().is_power_of_two());
 
-        let mut output = vec![vec![Complex::zero(); input.len()]; self.scales.len()];
-        let mut buffer = vec![Complex::zero(); input.len()];
+        let mut output = vec![vec![Complex::new(0.0, 0.0); input.len()]; self.scales.len()];
+        let mut buffer = vec![Complex::new(0.0, 0.0); input.len()];
 
-        let mut planner = rustfft::FftPlanner::<Float>::new();
+        #[cfg(feature = "fftw")]
+        let mut fft = crate::fft::FftwBackend::<Float>::new(input.len());
 
-        let fplan = planner.plan_fft_forward(input.len());
-        let iplan = planner.plan_fft_inverse(input.len());
+        #[cfg(not(feature = "fftw"))]
+        let mut fft = crate::fft::RustFftBackend::<Float>::new(input.len());
 
-        let mut input_fft: Vec<Complex> = input.iter().map(|&x| Complex::new(x, 0.0)).collect();
-
-        fplan.process(input_fft.as_mut_slice());
+        let input_fft = fft.forward(input);
 
         self.wavelet.generate_mother(input.len());
 
-        // Make the FFT output symmetrical
-        for i in 1..(input.len() >> 1) {
-            input_fft[input.len() - i].re = input_fft[i].re;
-            input_fft[input.len() - i].im = -input_fft[i].im;
-        }
-
-
         for i in 0..self.scales.len() {
-            let x = self.convolve(iplan.clone(), &input_fft, &mut buffer, self.scales.scale(i));
+            let x = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
             output[i] = x;
         }
 
         output
     }
 
-    fn convolve(&mut self, iplan: Arc<dyn Fft<Float>>, input: &Vec<Complex>, buffer: &mut Vec<Complex>, scale: Float) -> Vec<Complex> {
+    fn convolve(&mut self, fft: &mut dyn FftBackend<Float>, input: &Vec<Complex>, buffer: &mut Vec<Complex>, scale: Float) -> Vec<Complex> {
 
         self.daughter_wavelet_multiply(input, buffer, scale, false, false);
 
-        let mut output = buffer.clone();
-
-        // Inverse FFT
-        iplan.process(&mut output);
+        let mut output = fft.inverse(buffer);
 
         if self.normalize == true {
             self.normalize_inplace(&mut output);
@@ -191,7 +178,7 @@ mod tests {
             Complex::new(0.0, 0.0), // Replace with the expected values
         ];
 
-        let mut buffer = vec![Complex::zero(); 1024];
+        let mut buffer = vec![Complex::new(0.0, 0.0); 1024];
 
         // Call the function
         fast_cwt.daughter_wavelet_multiply(&input, &mut buffer, scale, imaginary, doublesided);
