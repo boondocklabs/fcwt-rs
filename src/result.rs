@@ -1,5 +1,7 @@
 use rustfft::num_complex::Complex;
 use core::ops::{Index, IndexMut};
+use rayon::prelude::*;
+
 
 pub struct CwtResult<T> {
     scales: usize,
@@ -43,6 +45,16 @@ impl CwtResult<f32> {
     #[inline]
     pub fn clear(&mut self) {
         self.data.clear();
+    }
+
+    pub fn normalize(&mut self) {
+        self.data.par_iter_mut().for_each(|row| {
+            let size = row.len() as f32;
+
+            row.par_iter_mut().for_each(|field| {
+                field.unscale(size as f32);
+            });
+        });
     }
 
 }

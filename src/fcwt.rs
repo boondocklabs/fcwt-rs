@@ -89,7 +89,17 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
 
             let row = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
 
-            output.push_row(row);
+            {
+                #[cfg(feature="profile")]
+                puffin::profile_scope!("push", i.to_string());
+                output.push_row(row);
+            }
+        }
+
+        if self.normalize {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("normalize");
+            output.normalize();
         }
 
         #[cfg(feature="profile")]
@@ -104,15 +114,19 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
 
         self.daughter_wavelet_multiply(input, buffer, scale, false, false);
 
-        let mut output = fft.inverse(buffer);
+        let output = fft.inverse(buffer);
 
+        /*
         if self.normalize == true {
             self.normalize_inplace(&mut output);
         }
+        */
 
        output 
     }
 
+    /*
+    #[inline]
     fn normalize_inplace(&self, data: &mut Vec<Complex>) {
         #[cfg(feature="profile")]
         puffin::profile_function!();
@@ -123,6 +137,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
             data[i] /= size as Float;
         }
     }
+    */
 
     fn daughter_wavelet_multiply(
         &mut self,
