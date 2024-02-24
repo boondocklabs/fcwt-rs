@@ -52,7 +52,7 @@ impl CwtResult<f32> {
             let size = row.len() as f32;
 
             row.par_iter_mut().for_each(|field| {
-                field.unscale(size as f32);
+                *field = field.unscale(size);
             });
         });
     }

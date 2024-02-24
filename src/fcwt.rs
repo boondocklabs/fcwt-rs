@@ -28,7 +28,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         &self.scales
     }
 
-    pub fn cwt(&mut self, input: &mut Vec<Float>) -> CwtResult<Float> {
+    pub fn cwt(&mut self, input: &Vec<Float>) -> CwtResult<Float> {
 
         #[cfg(feature="profile")]
         puffin::profile_function!();

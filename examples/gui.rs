@@ -139,7 +139,7 @@ impl eframe::App for WaveletDemo {
 
             ui.separator();
             if ui.button("Update Transform").clicked() {
-                let output = self.fcwt.cwt(&mut self.signal);
+                let output = self.fcwt.cwt(&self.signal);
                 self.output = Some(output);
                 self.update_image();
 
