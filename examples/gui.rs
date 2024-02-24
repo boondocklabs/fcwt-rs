@@ -1,13 +1,18 @@
 use egui::{epaint::Hsva, load::SizedTexture, CentralPanel, Color32, ColorImage, Context, Image, ImageSource, RichText, SidePanel, TextureHandle};
-use fcwt::{scales::LinFreqs, wavelet::Wavelet, Complex, FastCwt, MorletWavelet};
+use fcwt::{scales::LinFreqs, wavelet::Wavelet, CwtResult, FastCwt, MorletWavelet};
 use egui_plot::{Line, Plot, PlotPoints};
-use csv::Writer;
+//use csv::Writer;
 
-#[derive(serde::Serialize)]
-struct OutputRow {
-}
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
+
+    #[cfg(feature="profile")]
+    puffin::set_scopes_on(true);
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([2000.0, 1080.0])
@@ -41,7 +46,7 @@ struct WaveletDemo {
     normalize: bool,
 
     fcwt: FastCwt<MorletWavelet, LinFreqs>,
-    output: Option<Vec<Vec<Complex>>>,
+    output: Option<CwtResult<f32>>,
 }
 
 impl Default for WaveletDemo {
@@ -83,9 +88,10 @@ impl Default for WaveletDemo {
     }
 }
 
-fn save_csv(filename: String, data: &Vec<Vec<Complex>>) {
+/*
+fn save_csv(filename: String, data: &CwtResult<f32>) {
     let mut writer = Writer::from_path(filename).unwrap();
-    for row in data.iter() {
+    for row in data.rows().iter() {
         let r: Vec<f32> = row.iter().map(|x| x.norm()).collect();
         writer.serialize(r).unwrap();
     }
@@ -97,6 +103,7 @@ fn save_signal_csv(filename: String, data: &Vec<f32>) {
     writer.serialize(data).unwrap();
     writer.flush().unwrap();
 }
+*/
 
 impl eframe::App for WaveletDemo {
 
@@ -104,6 +111,8 @@ impl eframe::App for WaveletDemo {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
 
         //ctx.set_pixels_per_point(2.0);
+
+        puffin_egui::profiler_window(ctx);
 
         if self.texture.is_none() & !self.image.is_none(){
             // Allocate a new texture
@@ -131,13 +140,12 @@ impl eframe::App for WaveletDemo {
             ui.separator();
             if ui.button("Update Transform").clicked() {
                 let output = self.fcwt.cwt(&mut self.signal);
+                self.output = Some(output);
                 self.update_image();
 
                 // Save to transform.csv
-                save_csv("transform.csv".to_string(), &output);
-                save_signal_csv("signal.csv".to_string(), &self.signal);
-
-                self.output = Some(output);
+                //save_csv("transform.csv".to_string(), &output);
+                //save_signal_csv("signal.csv".to_string(), &self.signal);
             };
 
         });
@@ -202,25 +210,11 @@ impl WaveletDemo {
         // Get pixel value from the fCWT result
         if let Some(output) = &self.output {
 
-            if self.image.is_none() || self.image.as_ref().unwrap().height() != output.len() {
-                self.image = Some(egui::ColorImage::new([output[0].len(),output.len()], Color32::LIGHT_YELLOW));
+            if self.image.is_none() || self.image.as_ref().unwrap().height() != output.num_scales() {
+                self.image = Some(egui::ColorImage::new([output[0].len(),output.num_scales()], Color32::LIGHT_YELLOW));
             }
 
-            let mut max_val = f32::NEG_INFINITY;
-            let mut min_val = f32::INFINITY;
-            for y in 0..output.len() {
-                for x in 0..output[0].len() {
-                    if output[y][x].re > max_val {
-                        max_val = output[y][x].re;
-                    }
-
-                    if output[y][x].re < min_val {
-                        min_val = output[y][x].re;
-                    }
-                }
-            }
-
-            for y in 0..output.len() {
+            for y in 0..output.num_scales() {
                 for x in 0..output[0].len() {
                     let val = output[y][x];
                     let c = Hsva::new(val.norm(), 1.0, 1.0, 1.0);

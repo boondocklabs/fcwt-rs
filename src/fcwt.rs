@@ -1,9 +1,9 @@
 use crate::fft::FftBackend;
+use crate::CwtResult;
 use crate::{scales::Scales, wavelet::Wavelet};
 
 type Float = super::Float;
 type Complex = super::Complex;
-
 pub struct FastCwt<W: Wavelet, S: Scales> {
     wavelet: W,
     scales: S,
@@ -12,6 +12,7 @@ pub struct FastCwt<W: Wavelet, S: Scales> {
 
 impl <W: Wavelet, S: Scales> FastCwt<W, S> {
     pub fn new(wavelet: W, scales: S, normalize: bool) -> Self {
+
         Self {
             wavelet,
             scales,
@@ -27,7 +28,26 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         &self.scales
     }
 
-    pub fn cwt(&mut self, input: &mut Vec<Float>) -> Vec<Vec<Complex>> {
+    pub fn cwt(&mut self, input: &mut Vec<Float>) -> CwtResult<Float> {
+
+        #[cfg(feature="profile")]
+        puffin::profile_function!();
+
+        #[cfg(feature="profile")]
+        puffin::profile_scope!("cwt");
+
+        let mut fft = {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("plan");
+
+            #[cfg(feature = "fftw")]
+            let fft = crate::fft::FftwBackend::<Float>::new(input.len());
+
+            #[cfg(not(feature = "fftw"))]
+            let fft = crate::fft::RustFftBackend::<Float>::new(input.len());
+
+            fft
+        };
 
         /*
         if input.len().is_power_of_two() == false {
@@ -39,28 +59,48 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
 
         assert!(input.len().is_power_of_two());
 
-        let mut output = vec![vec![Complex::new(0.0, 0.0); input.len()]; self.scales.len()];
-        let mut buffer = vec![Complex::new(0.0, 0.0); input.len()];
+        let mut output = {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("alloc");
+            CwtResult::new(self.scales.len(), input.len())
+        };
 
-        #[cfg(feature = "fftw")]
-        let mut fft = crate::fft::FftwBackend::<Float>::new(input.len());
+        let mut buffer = {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("alloc_input");
+            vec![Complex::new(0.0, 0.0); input.len()]
+        };
 
-        #[cfg(not(feature = "fftw"))]
-        let mut fft = crate::fft::RustFftBackend::<Float>::new(input.len());
+        let input_fft = {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("fft");
+            fft.forward(input)
+        };
 
-        let input_fft = fft.forward(input);
-
-        self.wavelet.generate_mother(input.len());
+        {
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("mother");
+            self.wavelet.generate_mother(input.len());
+        }
 
         for i in 0..self.scales.len() {
-            let x = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
-            output[i] = x;
+            #[cfg(feature="profile")]
+            puffin::profile_scope!("scale", i.to_string());
+
+            let row = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
+
+            output.push_row(row);
         }
+
+        #[cfg(feature="profile")]
+        puffin::GlobalProfiler::lock().new_frame();
 
         output
     }
 
     fn convolve(&mut self, fft: &mut dyn FftBackend<Float>, input: &Vec<Complex>, buffer: &mut Vec<Complex>, scale: Float) -> Vec<Complex> {
+        #[cfg(feature="profile")]
+        puffin::profile_function!();
 
         self.daughter_wavelet_multiply(input, buffer, scale, false, false);
 
@@ -74,6 +114,9 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
     }
 
     fn normalize_inplace(&self, data: &mut Vec<Complex>) {
+        #[cfg(feature="profile")]
+        puffin::profile_function!();
+
         let size = data.len();
 
         for i in 0..size {
@@ -89,6 +132,9 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         imaginary: bool,
         doublesided: bool,
     ) {
+        #[cfg(feature="profile")]
+        puffin::profile_function!();
+
         let size = input.len();
         let step = scale / 2.0;
         let endpoint = ((size as f32) / 2.0).min((size as f32) * 2.0 / scale) as usize;
@@ -114,6 +160,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
 
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,3 +234,4 @@ mod tests {
         //assert_eq!(output, expected_output);
     }
 }
+*/

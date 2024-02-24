@@ -1,0 +1,5 @@
+[build]
+rustflags = ["-Ctarget-cpu=native"]
+
+[rust]
+debuginfo-level = 1
