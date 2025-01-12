@@ -50,14 +50,6 @@ impl<W: Wavelet, S: Scales> FastCwt<W, S> {
             fft
         };
 
-        /*
-        if input.len().is_power_of_two() == false {
-            let npot = input.len().next_power_of_two();
-            let npot_delta = npot - input.len();
-            input.extend_from_slice(&vec![0f32; npot_delta]);
-        }
-        */
-
         assert!(input.len().is_power_of_two());
 
         let mut output = {
@@ -128,28 +120,8 @@ impl<W: Wavelet, S: Scales> FastCwt<W, S> {
 
         let output = fft.inverse(buffer);
 
-        /*
-        if self.normalize == true {
-            self.normalize_inplace(&mut output);
-        }
-        */
-
         output
     }
-
-    /*
-    #[inline]
-    fn normalize_inplace(&self, data: &mut Vec<Complex>) {
-        #[cfg(feature="profile")]
-        puffin::profile_function!();
-
-        let size = data.len();
-
-        for i in 0..size {
-            data[i] /= size as Float;
-        }
-    }
-    */
 
     fn daughter_wavelet_multiply(
         &mut self,
@@ -190,17 +162,16 @@ impl<W: Wavelet, S: Scales> FastCwt<W, S> {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wavelet::MorletWavelet;
     use crate::scales::LinFreqs;
+    use crate::wavelet::MorletWavelet;
 
     #[test]
     fn test_fast_cwt_new() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         // Check if the FastCwt instance is created successfully
         assert_eq!(fast_cwt.cwt(&mut vec![0.0; 8]).len(), 5);
@@ -209,7 +180,7 @@ mod tests {
     #[test]
     fn test_fast_cwt_cwt_power_of_two() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let slen = s.len();
         let mut fast_cwt = FastCwt::new(w, s, false);
         let mut input = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
@@ -224,7 +195,7 @@ mod tests {
     #[should_panic]
     fn test_fast_cwt_cwt_non_power_of_two() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         let mut input = vec![1.0, 2.0, 3.0, 4.0, 5.0]; // Not a power of two
         let _ = fast_cwt.cwt(&mut input);
@@ -233,7 +204,7 @@ mod tests {
     #[test]
     fn test_daughter_wavelet_multiply() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         fast_cwt.wavelet.generate_mother(1024);
 
@@ -264,4 +235,3 @@ mod tests {
         //assert_eq!(output, expected_output);
     }
 }
-*/
