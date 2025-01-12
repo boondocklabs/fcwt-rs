@@ -47,9 +47,9 @@ impl Wavelet for MorletWavelet {
     fn generate_mother(&mut self, size: usize) -> Vec<Float> {
         let mut mother = Vec::with_capacity(size);
 
-        let torad = (2.0*PI)/size as Float;
-        let norm = (2.0*PI).sqrt()*super::IPI4;
-        
+        let torad = (2.0 * PI) / size as Float;
+        let norm = (2.0 * PI).sqrt() * super::IPI4;
+
         for i in 0..size {
             //let mut tmp = 2.0 * (i as Float).to_radians() * self.fb - 2.0 * PI * self.fb;
             let mut tmp = 2.0 * (i as Float * torad) * self.fb - 2.0 * PI * self.fb;
@@ -67,14 +67,14 @@ impl Wavelet for MorletWavelet {
         let width = self.get_support(scale);
         let norm = size as Float * self.ifb * super::IPI4;
 
-        let mut output: Vec<Complex> = Vec::with_capacity((width*2+1) as usize);
+        let mut output: Vec<Complex> = Vec::with_capacity((width * 2 + 1) as usize);
 
-        for i in 0..width*2+1 {
+        for i in 0..width * 2 + 1 {
             let tmp1 = (i - width) as Float / scale;
-            let tmp2 = (-(tmp1*tmp1) / self.fb2).exp();
+            let tmp2 = (-(tmp1 * tmp1) / self.fb2).exp();
 
-            let real = norm * tmp2 * (tmp1*2.0*PI).cos() / scale;
-            let imag = norm * tmp2 * (tmp1*2.0*PI).sin() / scale;
+            let real = norm * tmp2 * (tmp1 * 2.0 * PI).cos() / scale;
+            let imag = norm * tmp2 * (tmp1 * 2.0 * PI).sin() / scale;
 
             output.push(Complex::new(real, imag));
         }
@@ -82,28 +82,31 @@ impl Wavelet for MorletWavelet {
         output
     }
 
+    #[inline(always)]
     fn bandwidth(&self) -> Float {
         self.fb
     }
 
+    #[inline(always)]
     fn four_wavelen(&self) -> Float {
         self.four_wavelen
     }
 
+    #[inline(always)]
     fn imag_frequency(&self) -> bool {
         self.imag_frequency
     }
 
+    #[inline(always)]
     fn is_double_sided(&self) -> bool {
         self.double_sided
     }
 
+    #[inline(always)]
     fn mother(&self) -> &[Float] {
         self.mother.as_slice()
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -137,7 +140,10 @@ mod tests {
         let scale = 2.0;
         let result = morlet.generate(size, scale);
 
-        assert_eq!(result.len(), (morlet.get_support(scale) as Float * 2.0 + 1.0) as usize);
+        assert_eq!(
+            result.len(),
+            (morlet.get_support(scale) as Float * 2.0 + 1.0) as usize
+        );
 
         // Check if values we computed are within epsilon of values
         // produced using python bindings to fCWT C++ library
@@ -149,8 +155,10 @@ mod tests {
         for (i, complex) in result.iter().enumerate() {
             let tmp1 = (i as isize - morlet.get_support(scale)) as f32 / scale;
             let tmp2 = (-(tmp1 * tmp1) / morlet.fb2).exp();
-            let expected_real = size as Float * morlet.ifb * crate::IPI4 * tmp2 * (tmp1 * 2.0 * PI).cos() / scale;
-            let expected_imag = size as Float * morlet.ifb * crate::IPI4 * tmp2 * (tmp1 * 2.0 * PI).sin() / scale;
+            let expected_real =
+                size as Float * morlet.ifb * crate::IPI4 * tmp2 * (tmp1 * 2.0 * PI).cos() / scale;
+            let expected_imag =
+                size as Float * morlet.ifb * crate::IPI4 * tmp2 * (tmp1 * 2.0 * PI).sin() / scale;
 
             // Check if within epsilon
             assert!((complex.re - expected_real).abs() < EPS);

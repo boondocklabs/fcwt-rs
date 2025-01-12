@@ -1,5 +1,3 @@
-use crate::wavelet::Wavelet;
-
 type Float = super::Float;
 
 pub trait Scales {
@@ -9,25 +7,29 @@ pub trait Scales {
     fn freq(&self, index: usize) -> Float;
 }
 
+#[derive(Debug, Clone)]
 pub struct LinFreqs {
     scales: Vec<Float>,
     sample_rate: usize,
 }
 
 impl LinFreqs {
-    pub fn new<W: Wavelet>(_wavelet: &W, sample_rate: usize, start_freq: Float, end_freq: Float, size: usize) -> Self {
+    pub fn new(sample_rate: usize, start_freq: Float, end_freq: Float, size: usize) -> Self {
+        assert!(
+            start_freq < end_freq,
+            "start frequency must be lower than the end frequency"
+        );
+        // Ensure end freq is below Nyquist frequency (sample rate/2)
+        assert!(end_freq <= (sample_rate / 2) as Float);
 
         let mut scales: Vec<Float> = vec![0.0; size];
-
-        // Ensure end freq is below Nyquist frequency (sample rate/2)
-        assert!(end_freq <= (sample_rate/2) as Float);
 
         // frequency delta
         let df = end_freq - start_freq;
 
         for i in 0..size {
-            scales[size-i-1] = (sample_rate as Float) / (start_freq + (df/size as Float)*i as Float);
-
+            scales[size - i - 1] =
+                (sample_rate as Float) / (start_freq + (df / size as Float) * i as Float);
         }
 
         Self {
@@ -38,19 +40,27 @@ impl LinFreqs {
 }
 
 impl Scales for LinFreqs {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.scales.len()
     }
 
+    #[inline(always)]
     fn sample_rate(&self) -> usize {
         self.sample_rate
     }
 
+    #[inline(always)]
     fn scale(&self, index: usize) -> Float {
         self.scales[index]
     }
 
+    #[inline(always)]
     fn freq(&self, index: usize) -> Float {
+        assert!(
+            index < self.scales.len(),
+            "Frequency Index must be in bounds"
+        );
         self.sample_rate as Float / self.scales[index]
     }
 }
@@ -77,7 +87,8 @@ mod tests {
         // Check if scales are calculated correctly
         let df = end_freq - start_freq;
         for i in 0..size {
-            let expected_scale = (sample_rate as Float) / (start_freq + (df / size as Float) * i as Float);
+            let expected_scale =
+                (sample_rate as Float) / (start_freq + (df / size as Float) * i as Float);
             assert_eq!(lin_freqs.scales[size - i - 1], expected_scale);
         }
     }
@@ -102,6 +113,6 @@ mod tests {
         // Compare with values from python bindings to fCWT
         assert!(scales.freq(0) - 19.980999 < EPS);
         assert!(scales.freq(1) - 19.962 < EPS);
-        assert_eq!(scales.freq(scales.len()-1), 1.0);
+        assert_eq!(scales.freq(scales.len() - 1), 1.0);
     }
 }

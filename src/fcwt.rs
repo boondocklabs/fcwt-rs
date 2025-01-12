@@ -4,15 +4,15 @@ use crate::{scales::Scales, wavelet::Wavelet};
 
 type Float = super::Float;
 type Complex = super::Complex;
+
 pub struct FastCwt<W: Wavelet, S: Scales> {
     wavelet: W,
     scales: S,
     normalize: bool,
 }
 
-impl <W: Wavelet, S: Scales> FastCwt<W, S> {
+impl<W: Wavelet, S: Scales> FastCwt<W, S> {
     pub fn new(wavelet: W, scales: S, normalize: bool) -> Self {
-
         Self {
             wavelet,
             scales,
@@ -20,24 +20,25 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         }
     }
 
+    #[inline(always)]
     pub fn wavelet(&self) -> &W {
         &self.wavelet
     }
 
+    #[inline(always)]
     pub fn scales(&self) -> &S {
         &self.scales
     }
 
-    pub fn cwt(&mut self, input: &Vec<Float>) -> CwtResult<Float> {
-
-        #[cfg(feature="profile")]
+    pub fn cwt(&mut self, input: &[Float]) -> CwtResult<Float> {
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::profile_scope!("cwt");
 
         let mut fft = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("plan");
 
             #[cfg(feature = "fftw")]
@@ -60,56 +61,67 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         assert!(input.len().is_power_of_two());
 
         let mut output = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("alloc");
             CwtResult::new(self.scales.len(), input.len())
         };
 
         let mut buffer = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("alloc_input");
             vec![Complex::new(0.0, 0.0); input.len()]
         };
 
         let input_fft = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("fft");
             fft.forward(input)
         };
 
         {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("mother");
             self.wavelet.generate_mother(input.len());
         }
 
         for i in 0..self.scales.len() {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("scale", i.to_string());
 
-            let row = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
+            let row = self.convolve(
+                &mut fft,
+                &input_fft.to_vec(),
+                &mut buffer,
+                self.scales.scale(i),
+            );
 
             {
-                #[cfg(feature="profile")]
+                #[cfg(feature = "profile")]
                 puffin::profile_scope!("push", i.to_string());
                 output.push_row(row);
             }
         }
 
         if self.normalize {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("normalize");
             output.normalize();
         }
 
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::GlobalProfiler::lock().new_frame();
 
         output
     }
 
-    fn convolve(&mut self, fft: &mut dyn FftBackend<Float>, input: &Vec<Complex>, buffer: &mut Vec<Complex>, scale: Float) -> Vec<Complex> {
-        #[cfg(feature="profile")]
+    fn convolve(
+        &mut self,
+        fft: &mut dyn FftBackend<Float>,
+        input: &Vec<Complex>,
+        buffer: &mut Vec<Complex>,
+        scale: Float,
+    ) -> Vec<Complex> {
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
         self.daughter_wavelet_multiply(input, buffer, scale, false, false);
@@ -122,7 +134,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         }
         */
 
-       output 
+        output
     }
 
     /*
@@ -147,7 +159,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         imaginary: bool,
         doublesided: bool,
     ) {
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
         let size = input.len();
@@ -161,18 +173,21 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
             let mother_index = ((size - 1) as f32).min(step * i as f32);
 
             output[i].re = input[i].re * mother[mother_index as usize];
-            output[i].im = input[i].im * mother[mother_index as usize] * (1.0 - 2.0 * (imaginary as i32 as f32));
+            output[i].im = input[i].im
+                * mother[mother_index as usize]
+                * (1.0 - 2.0 * (imaginary as i32 as f32));
         }
 
         if doublesided {
             for i in 0..endpoint {
                 let mother_index = (size - 1).min((step * i as f32) as usize);
-                output[size - 1 - i].re = input[size - 1 - i].re * mother[mother_index] * (1.0 - 2.0 * (imaginary as i32 as f32));
+                output[size - 1 - i].re = input[size - 1 - i].re
+                    * mother[mother_index]
+                    * (1.0 - 2.0 * (imaginary as i32 as f32));
                 output[size - 1 - i].im = input[size - 1 - i].im * mother[mother_index];
             }
         }
     }
-
 }
 
 /*
