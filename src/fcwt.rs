@@ -174,7 +174,7 @@ mod tests {
         let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         // Check if the FastCwt instance is created successfully
-        assert_eq!(fast_cwt.cwt(&mut vec![0.0; 8]).len(), 5);
+        assert_eq!(fast_cwt.cwt(&mut vec![0.0; 8]).rows().len(), 5);
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
         let output = fast_cwt.cwt(&mut input);
 
         // Check if the output has the correct dimensions
-        assert_eq!(output.len(), slen);
+        assert_eq!(output.rows().len(), slen);
         assert_eq!(output[0].len(), input.len());
     }
 
