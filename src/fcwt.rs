@@ -4,15 +4,15 @@ use crate::{scales::Scales, wavelet::Wavelet};
 
 type Float = super::Float;
 type Complex = super::Complex;
+
 pub struct FastCwt<W: Wavelet, S: Scales> {
     wavelet: W,
     scales: S,
     normalize: bool,
 }
 
-impl <W: Wavelet, S: Scales> FastCwt<W, S> {
+impl<W: Wavelet, S: Scales> FastCwt<W, S> {
     pub fn new(wavelet: W, scales: S, normalize: bool) -> Self {
-
         Self {
             wavelet,
             scales,
@@ -20,24 +20,25 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         }
     }
 
+    #[inline(always)]
     pub fn wavelet(&self) -> &W {
         &self.wavelet
     }
 
+    #[inline(always)]
     pub fn scales(&self) -> &S {
         &self.scales
     }
 
-    pub fn cwt(&mut self, input: &Vec<Float>) -> CwtResult<Float> {
-
-        #[cfg(feature="profile")]
+    pub fn cwt(&mut self, input: &[Float]) -> CwtResult<Float> {
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::profile_scope!("cwt");
 
         let mut fft = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("plan");
 
             #[cfg(feature = "fftw")]
@@ -49,95 +50,78 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
             fft
         };
 
-        /*
-        if input.len().is_power_of_two() == false {
-            let npot = input.len().next_power_of_two();
-            let npot_delta = npot - input.len();
-            input.extend_from_slice(&vec![0f32; npot_delta]);
-        }
-        */
-
         assert!(input.len().is_power_of_two());
 
         let mut output = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("alloc");
             CwtResult::new(self.scales.len(), input.len())
         };
 
         let mut buffer = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("alloc_input");
             vec![Complex::new(0.0, 0.0); input.len()]
         };
 
         let input_fft = {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("fft");
             fft.forward(input)
         };
 
         {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("mother");
             self.wavelet.generate_mother(input.len());
         }
 
         for i in 0..self.scales.len() {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("scale", i.to_string());
 
-            let row = self.convolve(&mut fft, &input_fft.to_vec(), &mut buffer, self.scales.scale(i));
+            let row = self.convolve(
+                &mut fft,
+                &input_fft.to_vec(),
+                &mut buffer,
+                self.scales.scale(i),
+            );
 
             {
-                #[cfg(feature="profile")]
+                #[cfg(feature = "profile")]
                 puffin::profile_scope!("push", i.to_string());
                 output.push_row(row);
             }
         }
 
         if self.normalize {
-            #[cfg(feature="profile")]
+            #[cfg(feature = "profile")]
             puffin::profile_scope!("normalize");
             output.normalize();
         }
 
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::GlobalProfiler::lock().new_frame();
 
         output
     }
 
-    fn convolve(&mut self, fft: &mut dyn FftBackend<Float>, input: &Vec<Complex>, buffer: &mut Vec<Complex>, scale: Float) -> Vec<Complex> {
-        #[cfg(feature="profile")]
+    fn convolve(
+        &mut self,
+        fft: &mut dyn FftBackend<Float>,
+        input: &Vec<Complex>,
+        buffer: &mut Vec<Complex>,
+        scale: Float,
+    ) -> Vec<Complex> {
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
         self.daughter_wavelet_multiply(input, buffer, scale, false, false);
 
         let output = fft.inverse(buffer);
 
-        /*
-        if self.normalize == true {
-            self.normalize_inplace(&mut output);
-        }
-        */
-
-       output 
+        output
     }
-
-    /*
-    #[inline]
-    fn normalize_inplace(&self, data: &mut Vec<Complex>) {
-        #[cfg(feature="profile")]
-        puffin::profile_function!();
-
-        let size = data.len();
-
-        for i in 0..size {
-            data[i] /= size as Float;
-        }
-    }
-    */
 
     fn daughter_wavelet_multiply(
         &mut self,
@@ -147,7 +131,7 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
         imaginary: bool,
         doublesided: bool,
     ) {
-        #[cfg(feature="profile")]
+        #[cfg(feature = "profile")]
         puffin::profile_function!();
 
         let size = input.len();
@@ -161,47 +145,49 @@ impl <W: Wavelet, S: Scales> FastCwt<W, S> {
             let mother_index = ((size - 1) as f32).min(step * i as f32);
 
             output[i].re = input[i].re * mother[mother_index as usize];
-            output[i].im = input[i].im * mother[mother_index as usize] * (1.0 - 2.0 * (imaginary as i32 as f32));
+            output[i].im = input[i].im
+                * mother[mother_index as usize]
+                * (1.0 - 2.0 * (imaginary as i32 as f32));
         }
 
         if doublesided {
             for i in 0..endpoint {
                 let mother_index = (size - 1).min((step * i as f32) as usize);
-                output[size - 1 - i].re = input[size - 1 - i].re * mother[mother_index] * (1.0 - 2.0 * (imaginary as i32 as f32));
+                output[size - 1 - i].re = input[size - 1 - i].re
+                    * mother[mother_index]
+                    * (1.0 - 2.0 * (imaginary as i32 as f32));
                 output[size - 1 - i].im = input[size - 1 - i].im * mother[mother_index];
             }
         }
     }
-
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wavelet::MorletWavelet;
     use crate::scales::LinFreqs;
+    use crate::wavelet::MorletWavelet;
 
     #[test]
     fn test_fast_cwt_new() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         // Check if the FastCwt instance is created successfully
-        assert_eq!(fast_cwt.cwt(&mut vec![0.0; 8]).len(), 5);
+        assert_eq!(fast_cwt.cwt(&mut vec![0.0; 8]).rows().len(), 5);
     }
 
     #[test]
     fn test_fast_cwt_cwt_power_of_two() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let slen = s.len();
         let mut fast_cwt = FastCwt::new(w, s, false);
         let mut input = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         let output = fast_cwt.cwt(&mut input);
 
         // Check if the output has the correct dimensions
-        assert_eq!(output.len(), slen);
+        assert_eq!(output.rows().len(), slen);
         assert_eq!(output[0].len(), input.len());
     }
 
@@ -209,7 +195,7 @@ mod tests {
     #[should_panic]
     fn test_fast_cwt_cwt_non_power_of_two() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         let mut input = vec![1.0, 2.0, 3.0, 4.0, 5.0]; // Not a power of two
         let _ = fast_cwt.cwt(&mut input);
@@ -218,7 +204,7 @@ mod tests {
     #[test]
     fn test_daughter_wavelet_multiply() {
         let w = MorletWavelet::new(1.0);
-        let s = LinFreqs::new(&w, 100, 10.0, 20.0, 5);
+        let s = LinFreqs::new(100, 10.0, 20.0, 5);
         let mut fast_cwt = FastCwt::new(w, s, false);
         fast_cwt.wavelet.generate_mother(1024);
 
@@ -249,4 +235,3 @@ mod tests {
         //assert_eq!(output, expected_output);
     }
 }
-*/

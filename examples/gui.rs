@@ -1,6 +1,9 @@
-use egui::{epaint::Hsva, load::SizedTexture, CentralPanel, Color32, ColorImage, Context, Image, ImageSource, RichText, SidePanel, TextureHandle};
-use fcwt::{scales::LinFreqs, wavelet::Wavelet, CwtResult, FastCwt, MorletWavelet};
+use egui::{
+    epaint::Hsva, load::SizedTexture, CentralPanel, Color32, ColorImage, Image, ImageSource,
+    RichText, SidePanel, TextureHandle,
+};
 use egui_plot::{Line, Plot, PlotPoints};
+use fcwt::{scales::LinFreqs, wavelet::Wavelet, CwtResult, FastCwt, MorletWavelet};
 //use csv::Writer;
 
 use mimalloc::MiMalloc;
@@ -9,8 +12,7 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
-
-    #[cfg(feature="profile")]
+    #[cfg(feature = "profile")]
     puffin::set_scopes_on(true);
 
     let options = eframe::NativeOptions {
@@ -23,9 +25,9 @@ fn main() {
     eframe::run_native(
         "fCWT Image Display",
         options,
-        Box::new(|_cc| Box::new(WaveletDemo::default())),
-    ).unwrap();
-
+        Box::new(|_cc| Ok(Box::new(WaveletDemo::default()))),
+    )
+    .unwrap();
 }
 
 struct WaveletDemo {
@@ -60,7 +62,7 @@ impl Default for WaveletDemo {
         let f1 = 50.0f32;
 
         let wavelet = MorletWavelet::new(sigma);
-        let scales = LinFreqs::new(&wavelet, fs, f0, f1*2.0, size);
+        let scales = LinFreqs::new(fs, f0, f1 * 2.0, size);
 
         let signal_size = 8192u32.next_power_of_two() as usize;
 
@@ -106,15 +108,12 @@ fn save_signal_csv(filename: String, data: &Vec<f32>) {
 */
 
 impl eframe::App for WaveletDemo {
-
-
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         //ctx.set_pixels_per_point(2.0);
 
-        puffin_egui::profiler_window(ctx);
+        // puffin_egui::profiler_window(ctx);
 
-        if self.texture.is_none() & !self.image.is_none(){
+        if self.texture.is_none() & !self.image.is_none() {
             // Allocate a new texture
             if let Some(image) = &self.image {
                 let texture = ctx.load_texture("cwt", image.clone(), Default::default());
@@ -135,7 +134,9 @@ impl eframe::App for WaveletDemo {
 
             ui.label(RichText::new("Chirp Signal").color(Color32::LIGHT_BLUE));
             ui.add(egui::Slider::new(&mut self.f0, 1.0..=100.0).text("Start Freq"));
-            ui.add(egui::Slider::new(&mut self.f1, self.f0..=(self.fs as f32 / 4.0)).text("End Freq"));
+            ui.add(
+                egui::Slider::new(&mut self.f1, self.f0..=(self.fs as f32 / 4.0)).text("End Freq"),
+            );
 
             ui.separator();
             if ui.button("Update Transform").clicked() {
@@ -147,11 +148,9 @@ impl eframe::App for WaveletDemo {
                 //save_csv("transform.csv".to_string(), &output);
                 //save_signal_csv("signal.csv".to_string(), &self.signal);
             };
-
         });
 
         CentralPanel::default().show(ctx, |ui| {
-
             /*
             let mother_points: PlotPoints = self.fcwt.wavelet().mother().iter().enumerate().map(|(x,&v)| {
                 [x as f64 * 0.01, v as f64]
@@ -160,13 +159,18 @@ impl eframe::App for WaveletDemo {
             */
 
             let wave = self.fcwt.wavelet().generate(self.size, self.scale);
-            let wave_points: PlotPoints = wave.iter().enumerate().map(|(x,&v)| {
-                [x as f64, v.re as f64]
-            }).collect();
+            let wave_points: PlotPoints = wave
+                .iter()
+                .enumerate()
+                .map(|(x, &v)| [x as f64, v.re as f64])
+                .collect();
 
-            let signal_points: PlotPoints = self.signal.iter().enumerate().map(|(x,&v)| {
-                [x as f64, v as f64]
-            }).collect();
+            let signal_points: PlotPoints = self
+                .signal
+                .iter()
+                .enumerate()
+                .map(|(x, &v)| [x as f64, v as f64])
+                .collect();
             let signal_line = Line::new(signal_points);
 
             let wave_line = Line::new(wave_points);
@@ -185,33 +189,31 @@ impl eframe::App for WaveletDemo {
 
             if let Some(handle) = &self.texture {
                 let texture = SizedTexture::from_handle(handle);
-                let image = Image::new(ImageSource::Texture(texture))
-                    .shrink_to_fit();
+                let image = Image::new(ImageSource::Texture(texture)).shrink_to_fit();
                 ui.add(image);
             }
-
         });
 
         if self.f1 <= self.fs as f32 / 2.0 {
             let wavelet = MorletWavelet::new(self.sigma);
-            let scales = LinFreqs::new(&wavelet, self.fs, self.f0, self.f1*2.0, self.size);
+            let scales = LinFreqs::new(self.fs, self.f0, self.f1 * 2.0, self.size);
             self.fcwt = FastCwt::new(wavelet, scales, self.normalize);
 
             self.signal = fcwt::util::chirp(self.fs as f32, self.signal_size, self.f0, self.f1);
         }
-
-
     }
 }
 
 impl WaveletDemo {
     fn update_image(&mut self) {
-
         // Get pixel value from the fCWT result
         if let Some(output) = &self.output {
-
-            if self.image.is_none() || self.image.as_ref().unwrap().height() != output.num_scales() {
-                self.image = Some(egui::ColorImage::new([output[0].len(),output.num_scales()], Color32::LIGHT_YELLOW));
+            if self.image.is_none() || self.image.as_ref().unwrap().height() != output.num_scales()
+            {
+                self.image = Some(egui::ColorImage::new(
+                    [output[0].len(), output.num_scales()],
+                    Color32::LIGHT_YELLOW,
+                ));
             }
 
             for y in 0..output.num_scales() {
